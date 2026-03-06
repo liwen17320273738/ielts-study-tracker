@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ielts-study-tracker
+    runtime: docker
+    plan: free
+    envVars:
+      - key: TRACKER_PASSWORD
+        generateValue: false
+        value: ielts7
+      - key: DB_PATH
+        value: /app/data/tracker.db
