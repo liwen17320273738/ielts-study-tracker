@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useTracker, getDayDate, getDayWeekday } from '../stores/tracker'
 import { studyPlan } from '../data/studyPlan'
+import PomodoroTimer from './PomodoroTimer.vue'
 
 const tracker = useTracker()
 const selectedDay = ref(tracker.currentDay.value)
@@ -80,6 +81,11 @@ function onMinutesChange() {
 
 function onNotesBlur() {
   tracker.setNotes(selectedDay.value, notes.value)
+}
+
+function onPomodoroComplete(minutes: number) {
+  studyMinutes.value += minutes
+  tracker.setStudyMinutes(selectedDay.value, studyMinutes.value)
 }
 </script>
 
@@ -173,6 +179,8 @@ function onNotesBlur() {
             </span>
           </div>
         </div>
+
+        <PomodoroTimer @complete="onPomodoroComplete" />
 
         <div class="card">
           <div class="card-title"><span>😊</span> 今日状态</div>

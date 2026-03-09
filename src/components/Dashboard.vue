@@ -1,16 +1,30 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useTracker, getDayDate, getDayWeekday } from '../stores/tracker'
-import { studyPlan } from '../data/studyPlan'
+import { PLAN_START } from '../stores/tracker'
+import { studyPlan, mockExams } from '../data/studyPlan'
 import * as echarts from 'echarts'
+import dayjs from 'dayjs'
 
 const emit = defineEmits<{ (e: 'navigate', page: string): void }>()
 
 const {
   currentDay, currentWeek, totalStudyHours,
   completionRate, todayCompletionRate, streakDays,
-  weeklyHours, getWeekCompletionRate, isTaskDone
+  weeklyHours, getWeekCompletionRate, isTaskDone,
+  getStudyMinutes, getMockExam
 } = useTracker()
+
+const examDate = dayjs(PLAN_START).add(83, 'day')
+const daysUntilExam = computed(() => examDate.diff(dayjs(), 'day'))
+const examPassed = computed(() => daysUntilExam.value < 0)
+const encouragement = computed(() => {
+  const d = daysUntilExam.value
+  if (d > 60) return '稳扎稳打'
+  if (d > 30) return '加速冲刺'
+  if (d > 7) return '最后冲刺'
+  return '决战时刻'
+})
 
 const chartRef = ref<HTMLElement>()
 const pieRef = ref<HTMLElement>()
@@ -110,6 +124,60 @@ function initCharts() {
   }
 }
 
+// 热力图数据：84 天 = 12 周 × 7 天
+const heatmapData = computed(() => {
+  const cells = []
+  const today = dayjs()
+  for (let d = 1; d <= 84; d++) {
+    const date = dayjs(PLAN_START).add(d - 1, 'day')
+    const minutes = getStudyMinutes(d)
+    const isToday = date.isSame(today, 'day')
+    cells.push({ day: d, date: date.format('YYYY-MM-DD'), minutes, isToday })
+  }
+  return cells
+})
+
+function getHeatColor(minutes: number): string {
+  if (minutes <= 0) return '#1a1d28'
+  if (minutes <= 30) return 'rgba(74,222,128,0.2)'
+  if (minutes <= 60) return 'rgba(74,222,128,0.4)'
+  if (minutes <= 120) return 'rgba(74,222,128,0.6)'
+  if (minutes <= 180) return 'rgba(74,222,128,0.8)'
+  return '#4ade80'
+}
+
+// 薄弱环节分析
+const weaknessAnalysis = computed(() => {
+  const subjects = ['listening', 'reading', 'writing', 'speaking'] as const
+  const labels: Record<string, string> = {
+    listening: '听力', reading: '阅读', writing: '写作', speaking: '口语'
+  }
+  const sums = { listening: 0, reading: 0, writing: 0, speaking: 0 }
+  let count = 0
+
+  for (const exam of mockExams) {
+    const record = getMockExam(exam.id)
+    if (record.listening != null && record.reading != null &&
+        record.writing != null && record.speaking != null) {
+      sums.listening += record.listening
+      sums.reading += record.reading
+      sums.writing += record.writing
+      sums.speaking += record.speaking
+      count++
+    }
+  }
+
+  if (count === 0) return null
+
+  const avgs = subjects.map(s => ({
+    key: s,
+    label: labels[s],
+    avg: Math.round((sums[s] / count) * 10) / 10
+  }))
+  const weakest = avgs.reduce((a, b) => a.avg < b.avg ? a : b)
+  return { avgs, weakest, count }
+})
+
 onMounted(() => {
   setTimeout(initCharts, 100)
 })
@@ -118,6 +186,18 @@ onMounted(() => {
 <template>
   <div>
     <div class="page-title">学习概览</div>
+
+    <div class="countdown-banner" v-if="!examPassed">
+      <div class="countdown-main">
+        <span class="countdown-number">{{ daysUntilExam }}</span>
+        <span class="countdown-label">天</span>
+      </div>
+      <div class="countdown-text">距考试还有 {{ daysUntilExam }} 天</div>
+      <div class="countdown-encourage">{{ encouragement }}</div>
+    </div>
+    <div class="countdown-banner finished" v-else>
+      <div class="countdown-text">考试已结束</div>
+    </div>
 
     <div class="stats-grid">
       <div class="stat-card">
@@ -221,5 +301,289 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 学习热力图 -->
+    <div class="card heatmap-card">
+      <div class="card-title"><span>🔥</span> 学习热力图</div>
+      <div class="heatmap-wrapper">
+        <div class="heatmap-y-labels">
+          <span v-for="d in ['一', '二', '三', '四', '五', '六', '日']" :key="d">周{{ d }}</span>
+        </div>
+        <div class="heatmap-grid-area">
+          <div class="heatmap-grid">
+            <div
+              v-for="cell in heatmapData"
+              :key="cell.day"
+              class="heatmap-cell"
+              :class="{ 'heatmap-today': cell.isToday }"
+              :style="{ backgroundColor: getHeatColor(cell.minutes) }"
+              :title="`${cell.date}：${cell.minutes} 分钟`"
+            ></div>
+          </div>
+          <div class="heatmap-x-labels">
+            <span v-for="w in 12" :key="w">第{{ w }}周</span>
+          </div>
+        </div>
+      </div>
+      <div class="heatmap-legend">
+        <span class="heatmap-legend-label">少</span>
+        <span class="heatmap-legend-box" style="background: #1a1d28"></span>
+        <span class="heatmap-legend-box" style="background: rgba(74,222,128,0.2)"></span>
+        <span class="heatmap-legend-box" style="background: rgba(74,222,128,0.4)"></span>
+        <span class="heatmap-legend-box" style="background: rgba(74,222,128,0.6)"></span>
+        <span class="heatmap-legend-box" style="background: rgba(74,222,128,0.8)"></span>
+        <span class="heatmap-legend-box" style="background: #4ade80"></span>
+        <span class="heatmap-legend-label">多</span>
+      </div>
+    </div>
+
+    <!-- 薄弱环节分析 -->
+    <div class="card weakness-card">
+      <div class="card-title"><span>🎯</span> 薄弱环节分析</div>
+      <template v-if="weaknessAnalysis">
+        <div class="weakness-bars">
+          <div v-for="item in weaknessAnalysis.avgs" :key="item.key" class="weakness-row">
+            <span class="weakness-label">{{ item.label }}</span>
+            <div class="weakness-track">
+              <div
+                class="weakness-fill"
+                :style="{
+                  width: (item.avg / 9 * 100) + '%',
+                  background: item.key === weaknessAnalysis.weakest.key ? '#ef4444' : '#4f8cff'
+                }"
+              ></div>
+            </div>
+            <span class="weakness-score" :style="{ color: item.key === weaknessAnalysis.weakest.key ? '#ef4444' : '#4f8cff' }">
+              {{ item.avg }}
+            </span>
+          </div>
+        </div>
+        <div class="weakness-tip">
+          ⚠️ 你的{{ weaknessAnalysis.weakest.label }}相对薄弱（平均 {{ weaknessAnalysis.weakest.avg }} 分），建议每天多投入 30 分钟
+        </div>
+      </template>
+      <div v-else class="weakness-empty">
+        还没有模考数据，完成第一次模考后这里会显示分析
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.countdown-banner {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1);
+  border-radius: 12px;
+  padding: 24px 32px;
+  margin-bottom: 20px;
+  text-align: center;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.countdown-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.countdown-banner.finished {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+
+.countdown-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.countdown-number {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+
+.countdown-label {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.countdown-text {
+  font-size: 16px;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.countdown-encourage {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 16px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+/* 热力图 */
+.heatmap-card {
+  margin-top: 20px;
+}
+
+.heatmap-wrapper {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.heatmap-y-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.heatmap-y-labels span {
+  height: 14px;
+  line-height: 14px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.heatmap-grid-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 14px);
+  grid-auto-flow: column;
+  grid-auto-columns: 14px;
+  gap: 3px;
+}
+
+.heatmap-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  transition: transform 0.15s;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.4);
+  z-index: 1;
+}
+
+.heatmap-today {
+  outline: 2px solid #4f8cff;
+  outline-offset: 1px;
+}
+
+.heatmap-x-labels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 14px;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.heatmap-x-labels span {
+  font-size: 9px;
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.heatmap-legend-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.heatmap-legend-box {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+/* 薄弱环节分析 */
+.weakness-card {
+  margin-top: 20px;
+}
+
+.weakness-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.weakness-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weakness-label {
+  width: 36px;
+  font-size: 14px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.weakness-track {
+  flex: 1;
+  height: 20px;
+  background: var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.weakness-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.6s ease;
+}
+
+.weakness-score {
+  width: 32px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.weakness-tip {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  font-size: 14px;
+  color: #fca5a5;
+  line-height: 1.6;
+}
+
+.weakness-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+</style>

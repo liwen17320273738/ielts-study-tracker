@@ -5,6 +5,7 @@ import DailyCheckin from './components/DailyCheckin.vue'
 import WeeklyPlan from './components/WeeklyPlan.vue'
 import MockExams from './components/MockExams.vue'
 import Vocabulary from './components/Vocabulary.vue'
+import Achievements from './components/Achievements.vue'
 import Resources from './components/Resources.vue'
 import Templates from './components/Templates.vue'
 import { useTracker } from './stores/tracker'
@@ -19,6 +20,7 @@ const navItems = [
   { key: 'weekly', label: '周计划', icon: '📅' },
   { key: 'mockexam', label: '模考记录', icon: '📝' },
   { key: 'vocab', label: '词汇本', icon: '📚' },
+  { key: 'achievements', label: '成就奖励', icon: '🏆' },
   { key: 'resources', label: '学习资源', icon: '🔗' },
   { key: 'templates', label: '写作口语模板', icon: '📋' },
 ]
@@ -55,6 +57,7 @@ const navItems = [
       <WeeklyPlan v-if="currentPage === 'weekly'" />
       <MockExams v-if="currentPage === 'mockexam'" />
       <Vocabulary v-if="currentPage === 'vocab'" />
+      <Achievements v-if="currentPage === 'achievements'" />
       <Resources v-if="currentPage === 'resources'" />
       <Templates v-if="currentPage === 'templates'" />
     </main>

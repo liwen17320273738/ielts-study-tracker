@@ -1,6 +1,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { studyPlan } from '../data/studyPlan'
 import dayjs from 'dayjs'
+import { fetchState, saveStateToServer } from '../api'
 
 const STORAGE_KEY = 'ielts-tracker'
 export const PLAN_START = '2026-03-05'
@@ -48,14 +49,86 @@ function loadState(): TrackerState {
   return { days: {}, mockExams: {}, masteredVocab: [] }
 }
 
-function saveState(state: TrackerState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+function saveState(s: TrackerState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+}
+
+function backendToFrontend(data: Record<string, any>): TrackerState {
+  const days: Record<number, DayRecord> = {}
+  if (data.checkins) {
+    for (const [key, val] of Object.entries(data.checkins as Record<string, any>)) {
+      days[Number(key)] = {
+        completedTasks: val.tasks ? Object.keys(val.tasks).filter(k => val.tasks[k]) : [],
+        studyMinutes: val.studyMinutes || 0,
+        notes: val.notes || '',
+        mood: val.mood || '',
+      }
+    }
+  }
+  const mockExams: Record<number, MockExamRecord> = {}
+  if (data.mockExamScores) {
+    for (const [key, val] of Object.entries(data.mockExamScores as Record<string, any>)) {
+      mockExams[Number(key)] = { ...val, id: Number(key) }
+    }
+  }
+  const masteredVocab: string[] = data.vocabMastered
+    ? Object.keys(data.vocabMastered).filter(k => data.vocabMastered[k])
+    : []
+  return { days, mockExams, masteredVocab }
+}
+
+function frontendToBackend(s: TrackerState): Record<string, any> {
+  const checkins: Record<string, any> = {}
+  for (const [key, val] of Object.entries(s.days)) {
+    const dayNum = Number(key)
+    const tasks: Record<string, boolean> = {}
+    for (const taskId of val.completedTasks) tasks[taskId] = true
+    checkins[key] = {
+      dayNumber: dayNum,
+      tasks,
+      studyMinutes: val.studyMinutes,
+      notes: val.notes,
+      mood: val.mood,
+      date: dayjs(PLAN_START).add(dayNum - 1, 'day').format('YYYY-MM-DD'),
+    }
+  }
+  const mockExamScores: Record<string, any> = {}
+  for (const [key, val] of Object.entries(s.mockExams)) {
+    mockExamScores[key] = { ...val }
+  }
+  const vocabMastered: Record<string, boolean> = {}
+  for (const word of s.masteredVocab) vocabMastered[word] = true
+  return { checkins, mockExamScores, vocabMastered, startDate: PLAN_START }
+}
+
+let _debounceTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedSaveToBackend() {
+  if (_debounceTimer) clearTimeout(_debounceTimer)
+  _debounceTimer = setTimeout(() => {
+    saveStateToServer(frontendToBackend(state.value)).catch(err => {
+      console.warn('保存到后端失败:', err)
+    })
+  }, 500)
+}
+
+let _backendLoaded = false
+async function loadFromBackend() {
+  if (_backendLoaded) return
+  _backendLoaded = true
+  try {
+    const data = await fetchState()
+    state.value = backendToFrontend(data)
+    saveState(state.value)
+  } catch (err) {
+    console.warn('从后端加载失败，使用 localStorage:', err)
+  }
 }
 
 const state = ref<TrackerState>(loadState())
 
 function persist() {
   saveState(state.value)
+  debouncedSaveToBackend()
 }
 
 function getDayRecord(day: number): DayRecord {
@@ -83,6 +156,7 @@ function ensureTimer() {
 
 export function useTracker() {
   ensureTimer()
+  loadFromBackend()
 
   const currentDay = computed(() => {
     const diff = now.value.diff(dayjs(PLAN_START), 'day')
