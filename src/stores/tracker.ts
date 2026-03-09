@@ -1,9 +1,20 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { studyPlan } from '../data/studyPlan'
 import dayjs from 'dayjs'
 
 const STORAGE_KEY = 'ielts-tracker'
-const PLAN_START = '2025-03-05'
+export const PLAN_START = '2026-03-05'
+
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+export function getDayDate(day: number): string {
+  const d = dayjs(PLAN_START).add(day - 1, 'day')
+  return `${d.month() + 1}月${d.date()}日`
+}
+
+export function getDayWeekday(day: number): string {
+  return WEEKDAYS[dayjs(PLAN_START).add(day - 1, 'day').day()]
+}
 
 interface DayRecord {
   completedTasks: string[]
@@ -63,9 +74,18 @@ function getDayTasks(day: number) {
   return []
 }
 
+const now = ref(dayjs())
+let _timer: ReturnType<typeof setInterval> | null = null
+function ensureTimer() {
+  if (_timer) return
+  _timer = setInterval(() => { now.value = dayjs() }, 60_000)
+}
+
 export function useTracker() {
+  ensureTimer()
+
   const currentDay = computed(() => {
-    const diff = dayjs().diff(dayjs(PLAN_START), 'day')
+    const diff = now.value.diff(dayjs(PLAN_START), 'day')
     return Math.max(1, Math.min(84, diff + 1))
   })
 
@@ -88,7 +108,7 @@ export function useTracker() {
 
   function getDayCompletionRate(day: number): number {
     const tasks = getDayTasks(day)
-    if (tasks.length === 0) return 100
+    if (tasks.length === 0) return 0
     const done = tasks.filter(t => isTaskDone(day, t.id)).length
     return Math.round(done / tasks.length * 100)
   }
@@ -103,7 +123,7 @@ export function useTracker() {
         if (isTaskDone(day.day, task.id)) done++
       }
     }
-    return total === 0 ? 100 : Math.round(done / total * 100)
+    return total === 0 ? 0 : Math.round(done / total * 100)
   }
 
   const todayCompletionRate = computed(() => getDayCompletionRate(currentDay.value))

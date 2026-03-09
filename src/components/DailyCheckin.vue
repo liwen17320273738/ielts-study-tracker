@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useTracker } from '../stores/tracker'
+import { useTracker, getDayDate, getDayWeekday } from '../stores/tracker'
 import { studyPlan } from '../data/studyPlan'
 
 const tracker = useTracker()
@@ -92,7 +92,7 @@ function onNotesBlur() {
       <div class="day-info">
         <div class="day-num">Day {{ selectedDay }}</div>
         <div class="day-date" v-if="currentDayData">
-          {{ currentDayData.date }} {{ currentDayData.weekday }}
+          {{ getDayDate(selectedDay) }} {{ getDayWeekday(selectedDay) }}
           <span v-if="selectedDay === tracker.currentDay.value"
             style="color: var(--accent-green); margin-left: 4px">· 今天</span>
         </div>

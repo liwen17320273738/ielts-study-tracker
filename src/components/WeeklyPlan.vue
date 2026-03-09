@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useTracker } from '../stores/tracker'
+import { useTracker, getDayDate, getDayWeekday } from '../stores/tracker'
 import { studyPlan } from '../data/studyPlan'
 
 const tracker = useTracker()
@@ -51,7 +51,7 @@ function totalDayMinutes(dayNum: number) {
           style="padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600"
           :style="{ background: getPhaseStyle(weekData.phase).bg, color: getPhaseStyle(weekData.phase).color }"
         >{{ weekData.phase }}</span>
-        <span style="font-size: 13px; color: var(--text-secondary); margin-left: auto">{{ weekData.dateRange }}</span>
+        <span style="font-size: 13px; color: var(--text-secondary); margin-left: auto">{{ getDayDate((weekData.week - 1) * 7 + 1) }} - {{ getDayDate(weekData.week * 7) }}</span>
       </div>
 
       <div style="padding: 12px 16px; background: var(--bg-primary); border-radius: 8px; margin-bottom: 16px">
@@ -89,7 +89,7 @@ function totalDayMinutes(dayNum: number) {
     <div v-if="weekData" v-for="day in weekData.days" :key="day.day" class="card">
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
         <span style="font-size: 16px; font-weight: 700; color: var(--accent-blue)">Day {{ day.day }}</span>
-        <span style="font-size: 13px; color: var(--text-secondary)">{{ day.date }} {{ day.weekday }}</span>
+        <span style="font-size: 13px; color: var(--text-secondary)">{{ getDayDate(day.day) }} {{ getDayWeekday(day.day) }}</span>
         <span
           v-if="day.day === tracker.currentDay.value"
           style="padding: 2px 8px; background: rgba(74,222,128,0.2); color: var(--accent-green); border-radius: 4px; font-size: 11px; font-weight: 600"

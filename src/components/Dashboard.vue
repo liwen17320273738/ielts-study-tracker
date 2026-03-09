@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useTracker } from '../stores/tracker'
+import { useTracker, getDayDate, getDayWeekday } from '../stores/tracker'
 import { studyPlan } from '../data/studyPlan'
 import * as echarts from 'echarts'
 
@@ -156,7 +156,7 @@ onMounted(() => {
         <div class="card-title">
           <span>✅</span> 今日任务 · Day {{ currentDay }}
           <span style="margin-left: auto; font-size: 13px; color: var(--text-secondary)">
-            {{ getTodayTasks().date }} {{ getTodayTasks().weekday }}
+            {{ getDayDate(currentDay) }} {{ getDayWeekday(currentDay) }}
           </span>
         </div>
         <div style="margin-bottom: 12px; color: var(--accent-blue); font-size: 13px">
