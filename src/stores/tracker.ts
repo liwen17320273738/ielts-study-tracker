@@ -1,7 +1,7 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { studyPlan } from '../data/studyPlan'
 import dayjs from 'dayjs'
-import { fetchState, saveStateToServer } from '../api'
+import { ApiUnauthorized, fetchState, loginApi, saveStateToServer } from '../api'
 
 const STORAGE_KEY = 'ielts-tracker'
 export const PLAN_START = '2026-03-05'
@@ -101,27 +101,52 @@ function frontendToBackend(s: TrackerState): Record<string, any> {
   return { checkins, mockExamScores, vocabMastered, startDate: PLAN_START }
 }
 
+const needsAuth = ref(false)
+
 let _debounceTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedSaveToBackend() {
   if (_debounceTimer) clearTimeout(_debounceTimer)
   _debounceTimer = setTimeout(() => {
     saveStateToServer(frontendToBackend(state.value)).catch(err => {
-      console.warn('保存到后端失败:', err)
+      if (err instanceof ApiUnauthorized) {
+        needsAuth.value = true
+        _loadOncePromise = null
+      } else {
+        console.warn('保存到后端失败:', err)
+      }
     })
   }, 500)
 }
 
-let _backendLoaded = false
+let _loadOncePromise: Promise<void> | null = null
 async function loadFromBackend() {
-  if (_backendLoaded) return
-  _backendLoaded = true
-  try {
-    const data = await fetchState()
-    state.value = backendToFrontend(data)
-    saveState(state.value)
-  } catch (err) {
-    console.warn('从后端加载失败，使用 localStorage:', err)
+  if (!_loadOncePromise) {
+    _loadOncePromise = (async () => {
+      try {
+        const data = await fetchState()
+        state.value = backendToFrontend(data)
+        saveState(state.value)
+        needsAuth.value = false
+      } catch (err) {
+        if (err instanceof ApiUnauthorized) {
+          needsAuth.value = true
+          _loadOncePromise = null
+        } else {
+          console.warn('从后端加载失败，使用 localStorage:', err)
+          needsAuth.value = false
+        }
+      }
+    })()
   }
+  return _loadOncePromise
+}
+
+async function submitBackendLogin(password: string): Promise<boolean> {
+  const ok = await loginApi(password)
+  if (!ok) return false
+  _loadOncePromise = null
+  await loadFromBackend()
+  return !needsAuth.value
 }
 
 const state = ref<TrackerState>(loadState())
@@ -300,6 +325,8 @@ export function useTracker() {
   }
 
   return {
+    needsAuth,
+    submitBackendLogin,
     currentDay,
     currentWeek,
     totalStudyHours,

@@ -5,7 +5,8 @@ primary_region = 'sin'
 
 [env]
   DB_PATH = '/app/data/tracker.db'
-  TRACKER_PASSWORD = 'ielts7'
+  TRACKER_PASSWORD = '123456'
+  TRACKER_COOKIE_SECURE = '1'
 
 [http_service]
   internal_port = 7860

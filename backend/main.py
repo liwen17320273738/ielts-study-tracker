@@ -12,8 +12,20 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, load_full_state, save_full_state
 
-AUTH_PASSWORD = os.environ.get("TRACKER_PASSWORD", "ielts7")
+AUTH_PASSWORD = os.environ.get("TRACKER_PASSWORD", "123456").strip()
 SESSION_SECRET = os.environ.get("SESSION_SECRET", secrets.token_hex(32))
+# Production behind HTTPS: set TRACKER_COOKIE_SECURE=1 so cookie uses SameSite=None + Secure.
+TRACKER_COOKIE_SECURE = os.environ.get("TRACKER_COOKIE_SECURE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
+
+def _session_cookie_params() -> tuple[bool, str]:
+    if TRACKER_COOKIE_SECURE:
+        return True, "none"
+    return False, "lax"
 
 
 def make_token(password: str) -> str:
@@ -50,9 +62,15 @@ button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(102,126,234,.
 <script>
 async function login(e){
   e.preventDefault();
-  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({password:document.getElementById('pw').value}),credentials:'include'});
-  if(r.ok){location.reload()}else{document.getElementById('err').style.display='block'}
+  const err=document.getElementById('err');
+  err.style.display='none';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:document.getElementById('pw').value.trim()}),credentials:'include'});
+    if(r.ok){location.reload()}
+    else if(r.status===401){err.textContent='密码错误';err.style.display='block'}
+    else{err.textContent='登录失败 ('+r.status+')';err.style.display='block'}
+  }catch{err.textContent='网络错误';err.style.display='block'}
   return false;
 }
 </script></body></html>"""
@@ -83,11 +101,18 @@ def check_auth(request: Request) -> bool:
 @app.post("/api/login")
 async def login(request: Request):
     data = await request.json()
-    if data.get("password") == AUTH_PASSWORD:
+    raw = data.get("password")
+    attempt = raw.strip() if isinstance(raw, str) else raw
+    if attempt == AUTH_PASSWORD:
         resp = JSONResponse({"ok": True})
+        secure, samesite = _session_cookie_params()
         resp.set_cookie(
-            "tracker_token", VALID_TOKEN,
-            httponly=True, max_age=86400 * 30, samesite="lax",
+            "tracker_token",
+            VALID_TOKEN,
+            httponly=True,
+            max_age=86400 * 30,
+            secure=secure,
+            samesite=samesite,
         )
         return resp
     return JSONResponse({"error": "wrong password"}, status_code=401)
@@ -96,7 +121,10 @@ async def login(request: Request):
 @app.get("/api/logout")
 def logout():
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie("tracker_token")
+    secure, samesite = _session_cookie_params()
+    resp.delete_cookie(
+        "tracker_token", path="/", httponly=True, secure=secure, samesite=samesite
+    )
     return resp
 
 

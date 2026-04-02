@@ -6,6 +6,8 @@ services:
     envVars:
       - key: TRACKER_PASSWORD
         generateValue: false
-        value: ielts7
+        value: "123456"
+      - key: TRACKER_COOKIE_SECURE
+        value: "1"
       - key: DB_PATH
         value: /app/data/tracker.db
