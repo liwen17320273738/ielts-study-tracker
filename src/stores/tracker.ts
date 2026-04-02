@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { studyPlan } from '../data/studyPlan'
 import dayjs from 'dayjs'
-import { ApiUnauthorized, fetchState, loginApi, saveStateToServer } from '../api'
+import { fetchState, isApiUnauthorized, loginApi, saveStateToServer } from '../api'
 
 const STORAGE_KEY = 'ielts-tracker'
 export const PLAN_START = '2026-03-05'
@@ -108,7 +108,7 @@ function debouncedSaveToBackend() {
   if (_debounceTimer) clearTimeout(_debounceTimer)
   _debounceTimer = setTimeout(() => {
     saveStateToServer(frontendToBackend(state.value)).catch(err => {
-      if (err instanceof ApiUnauthorized) {
+      if (isApiUnauthorized(err)) {
         needsAuth.value = true
         _loadOncePromise = null
       } else {
@@ -128,7 +128,7 @@ async function loadFromBackend() {
         saveState(state.value)
         needsAuth.value = false
       } catch (err) {
-        if (err instanceof ApiUnauthorized) {
+        if (isApiUnauthorized(err)) {
           needsAuth.value = true
           _loadOncePromise = null
         } else {
