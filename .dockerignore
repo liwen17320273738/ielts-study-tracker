@@ -1,8 +1,13 @@
+# 加快 Docker / Hugging Face Spaces 构建（勿忽略 docs/，前端会打包其中 Markdown）
 node_modules
-.venv
-dist
-data
-__pycache__
-*.pyc
 .git
+.github
+.vite
+.venv
+.venv-*
+**/__pycache__
+*.pyc
 .env
+*.db
+dist
+.cursor
