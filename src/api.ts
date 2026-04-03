@@ -1,19 +1,14 @@
 const API_BASE = ''
 
-/** 打包到不同 chunk 时 instanceof 可能失效，校验时请用 isApiUnauthorized */
-export class ApiUnauthorized extends Error {
-  readonly code = 'TRACKER_UNAUTHORIZED' as const
-  constructor() {
-    super('Unauthorized')
-    this.name = 'ApiUnauthorized'
-  }
-}
+/** 使用纯对象标记，避免多 chunk / class 压缩导致 instanceof、.code 失效 */
+export const TRACKER_UNAUTHORIZED = Object.freeze({
+  __trackerUnauthorized: true as const,
+})
 
 export function isApiUnauthorized(err: unknown): boolean {
+  if (err === TRACKER_UNAUTHORIZED) return true
   if (!err || typeof err !== 'object') return false
-  if ((err as { code?: string }).code === 'TRACKER_UNAUTHORIZED') return true
-  if (err instanceof ApiUnauthorized) return true
-  return err instanceof Error && err.name === 'ApiUnauthorized'
+  return (err as { __trackerUnauthorized?: boolean }).__trackerUnauthorized === true
 }
 
 export async function loginApi(password: string): Promise<boolean> {
@@ -29,7 +24,7 @@ export async function loginApi(password: string): Promise<boolean> {
 export async function fetchState(): Promise<Record<string, any>> {
   const res = await fetch(`${API_BASE}/api/state`, { credentials: 'include' })
   if (res.status === 401) {
-    throw new ApiUnauthorized()
+    throw TRACKER_UNAUTHORIZED
   }
   if (!res.ok) throw new Error(`GET /api/state failed: ${res.status}`)
   return res.json()
@@ -43,7 +38,7 @@ export async function saveStateToServer(state: Record<string, any>): Promise<voi
     credentials: 'include',
   })
   if (res.status === 401) {
-    throw new ApiUnauthorized()
+    throw TRACKER_UNAUTHORIZED
   }
   if (!res.ok) throw new Error(`PUT /api/state failed: ${res.status}`)
 }
