@@ -7,6 +7,7 @@ export const TRACKER_UNAUTHORIZED = Object.freeze({
 
 export function isApiUnauthorized(err: unknown): boolean {
   if (err === TRACKER_UNAUTHORIZED) return true
+  if (err instanceof Error && err.message === 'Unauthorized') return true
   if (!err || typeof err !== 'object') return false
   return (err as { __trackerUnauthorized?: boolean }).__trackerUnauthorized === true
 }
